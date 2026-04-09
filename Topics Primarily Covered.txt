@@ -43,3 +43,4 @@ Commands Familiarized:
 7. usrmod
 8. userdel
 9. adduser
+10. grep
