@@ -24,6 +24,8 @@ Topics Primarily Covered:
 	1.13 How to change who is allowed to use sudo?
 	1.14 Write the command to show the contents of the passwd file.
 	1.15 Dissect the following: root:x:0:0:root:/root:/bin/bash
+	1.16 Create a new user and show only that users configuration.
+
 2. File System
 3. Symlink
 4. Hard Link
