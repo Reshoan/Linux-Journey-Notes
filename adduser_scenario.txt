@@ -1,0 +1,139 @@
+● Scenario: You Just Provisioned a New Ubuntu Server
+
+  Your company spun up a fresh Ubuntu server that will host a
+  web application. You need to set it up properly before the
+  team starts using it.
+
+  ---
+  Step 1 — Create a System User for Your Web Service (nginx)
+
+  Your app runs as a background service. It should never be able
+   to log in as a real user — that's a security risk.
+
+  sudo adduser --system --no-create-home --shell
+  /usr/sbin/nologin nginx
+
+  - --system → marks it as a service account, not a person
+  - --no-create-home → services don't need a home directory
+  - --shell /usr/sbin/nologin → even if someone tries, they
+  can't log in as this user
+
+  ---
+  Step 2 — Create Groups for Your Team
+
+  You have two types of people: developers (need to deploy code)
+   and junior ops (need limited access).
+
+  sudo addgroup developers
+  sudo addgroup ops-readonly
+
+  ---
+  Step 3 — Onboard a New Developer
+
+  Alice just joined the backend team. She needs a real account
+  with SSH access.
+
+  sudo adduser --ingroup developers --shell /bin/bash --comment
+  "Alice Smith" alice
+
+  - --ingroup developers → her primary group is developers right
+   away
+  - --shell /bin/bash → she gets a proper shell
+  - --comment → labels the account with her real name (useful
+  for auditing)
+
+  You'll then add her SSH public key:
+  sudo mkdir /home/alice/.ssh
+  sudo nano /home/alice/.ssh/authorized_keys   # paste her
+  public key
+  sudo chown -R alice:alice /home/alice/.ssh
+  sudo chmod 700 /home/alice/.ssh
+
+  ---
+  Step 4 — Onboard a Contractor (Restricted Access)
+
+  Bob is a contractor. He needs temporary, limited access — no
+  password login, only SSH, and he can't do much.
+
+  sudo adduser --disabled-password --ingroup ops-readonly
+  --comment "Bob (Contractor)" bob
+
+  - --disabled-password → forces SSH key-only login, no password
+   brute-force risk
+
+  Later when his contract ends:
+  sudo deluser bob
+
+  ---
+  Step 5 — Give Alice Access to Another Group (sudo / docker)
+
+  Alice needs to run Docker commands. Docker requires group
+  membership.
+
+  sudo adduser alice docker
+
+  She also needs limited sudo access on this server:
+  sudo adduser alice sudo
+
+  ▎ This is the "add existing user to existing group" mode —
+  ▎ just adduser username groupname.
+
+  ---
+  Step 6 — Create a Deploy User for Your CI/CD Pipeline
+
+  Your CI/CD tool (e.g. GitHub Actions, Jenkins) needs to SSH
+  into the server and deploy code. It should be heavily
+  restricted.
+
+  sudo adduser \
+    --system \
+    --home /var/lib/deploy \
+    --shell /bin/bash \
+    --ingroup developers \
+    --comment "CI/CD Deploy Bot" \
+    deploy
+
+  - Has a home directory this time (needed to store the SSH
+  authorized_keys)
+  - Gets /bin/bash because it needs to run deploy scripts
+  - But it's a --system account — clearly marked as non-human
+
+  ---
+  The Big Picture
+
+  Here's what you ended up with:
+
+  Groups:       developers        ops-readonly
+                ──────────────    ──────────────
+  Users:        alice (human)     bob (contractor)
+                deploy (CI/CD)
+
+  System users: nginx (web server, no login)
+
+  ┌───────────────────────┬─────────────────────────────────┐
+  │       Use Case        │         Command Pattern         │
+  ├───────────────────────┼─────────────────────────────────┤
+  │ Service/daemon        │ adduser --system                │
+  │ account               │ --no-create-home --shell        │
+  │                       │ /usr/sbin/nologin               │
+  ├───────────────────────┼─────────────────────────────────┤
+  │ Real developer        │ adduser --ingroup <group>       │
+  │ account               │ --shell /bin/bash --comment     │
+  │                       │ "Name"                          │
+  ├───────────────────────┼─────────────────────────────────┤
+  │ Restricted/contractor │ adduser --disabled-password     │
+  │                       │ --ingroup <group>               │
+  ├───────────────────────┼─────────────────────────────────┤
+  │ CI/CD bot             │ adduser --system --home         │
+  │                       │ /var/lib/ --shell /bin/bash     │
+  ├───────────────────────┼─────────────────────────────────┤
+  │ Add to a group        │ adduser <user> <group>          │
+  ├───────────────────────┼─────────────────────────────────┤
+  │ Create a group        │ addgroup <groupname>            │
+  └───────────────────────┴─────────────────────────────────┘
+
+  ---
+  The core DevOps principle here is least privilege — every
+  account gets exactly the access it needs and nothing more.
+  adduser's options exist precisely to enforce that from the
+  moment an account is created.
