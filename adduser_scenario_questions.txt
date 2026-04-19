@@ -1,0 +1,234 @@
+1. What is a server and why is it necessary to host a web application?
+2. What is nginx?
+3. What does background service mean?
+4. Why would a webservice being able to log in as a real user be a security risk?
+5. Why do system users not need a home directory?
+6. Why does keeping files in "--shell /usr/sbin/nologin" prevent anyone from logging in as a system user? And is it even possible for a human to login as a system user in general?
+7. What does "giving alice a proper shell" mean?
+8. What is bin/bash?
+9. What is SSH public key?
+10. Explain this chunk of code from the scenario:
+	"sudo mkdir /home/alice.ssh -> what is this directory?
+	 sudo nano /home/alice/.ssh/authorized_keys -> what is this file?
+		/#paste public keys
+	 sudo chown -R alice:alice /home/alice/.ssh -> I don't understand this command.
+	 sudo chmod 700 /home/alice/.ssh" -> I don't understand this command.
+11. For the command "--disabled-password" its said, "forces SSH key-only login, no password brute-force risk", what does this mean?
+12. Explain deluser.
+13. What is docker?
+14. Explain this code snippet focusing on what it's doing, where its doing what its doing and why the specific paths are being used?
+	"sudo adduser \
+    --system \
+    --home /var/lib/deploy \
+    --shell /bin/bash \
+    --ingroup developers \
+    --comment "CI/CD Deploy Bot" \
+    deploy"
+
+================================================================================
+ANSWERS
+================================================================================
+
+1. What is a server and why is it necessary to host a web application?
+--------------------------------------------------------------------------------
+A server is just a computer — but one that runs 24/7, connected to the internet,
+waiting to respond to requests. When someone types your website's address in their
+browser, that request travels across the internet and reaches your server, which
+sends back the webpage. You need a server because your personal laptop isn't always
+on, doesn't have a stable public IP address, and isn't built to handle thousands of
+simultaneous connections. A dedicated server is.
+
+
+2. What is nginx?
+--------------------------------------------------------------------------------
+nginx (pronounced "engine-x") is a popular web server software. It sits on your
+server and listens for incoming HTTP requests from browsers. When a request arrives,
+nginx decides what to do with it — serve a static HTML file, or forward the request
+to your actual application (like a Python or Node.js app). Think of it as the front
+door of your web application.
+
+
+3. What does background service mean?
+--------------------------------------------------------------------------------
+A background service (also called a daemon) is a program that runs silently in the
+background without any human interaction. It starts when the server boots up and
+just keeps running, doing its job. nginx is a background service — it's always
+running, waiting for web requests, without anyone actively "using" it like a human
+would use a program. You never open a window for it or type commands into it.
+
+
+4. Why would a web service being able to log in as a real user be a security risk?
+--------------------------------------------------------------------------------
+If your nginx process gets hacked (e.g., through a vulnerability in your app), the
+attacker gains control of whatever user nginx is running as. If that user can log
+into the system interactively, the attacker can now browse your files, run commands,
+escalate privileges, and cause serious damage. By running nginx as a system user
+with no login shell, even if it gets compromised, the attacker is trapped — they
+can't do much beyond what nginx itself is allowed to do. This is the principle of
+least privilege.
+
+
+5. Why do system users not need a home directory?
+--------------------------------------------------------------------------------
+A home directory (/home/username) is a personal space where a user's settings,
+files, and preferences are stored. Humans need this. Background services don't have
+preferences, don't save personal files, and don't need a workspace tied to their
+identity. They typically read/write to specific application directories instead
+(like /var/log/nginx for logs, /etc/nginx for config). Creating a home directory
+for them would be wasted space and a potential security surface.
+
+
+6. Why does /usr/sbin/nologin prevent login? Can a human actually log in as a system user?
+--------------------------------------------------------------------------------
+When a user logs in, Linux runs whatever program is set as their shell. Normally
+that's /bin/bash, which gives you an interactive terminal. /usr/sbin/nologin is a
+tiny program that does exactly one thing: prints "This account is currently not
+available" and exits immediately. So even if someone had the password, the login
+would instantly close.
+
+Yes, technically a human could attempt to log in as a system user — Linux doesn't
+physically block the attempt. But nologin makes it immediately fail. And since
+system users also have no password set, there's nothing to authenticate with in
+the first place.
+
+
+7. What does "giving Alice a proper shell" mean?
+--------------------------------------------------------------------------------
+A shell is the program that interprets your commands when you open a terminal.
+"Giving Alice a proper shell" means setting her login shell to something interactive
+and functional like /bin/bash, so when she SSH's into the server she gets a real
+terminal where she can run commands, navigate directories, edit files, etc. The
+alternative (/usr/sbin/nologin) would kick her out the moment she connects.
+
+
+8. What is /bin/bash?
+--------------------------------------------------------------------------------
+/bin/bash is the path to the Bash program on your system. Bash (Bourne Again SHell)
+is the most common command-line shell on Linux. When you open a terminal and type
+commands, Bash is usually what's interpreting them. The path /bin/bash just means:
+"the bash executable lives in the /bin directory." When set as a user's shell, it's
+what launches when they log in.
+
+
+9. What is an SSH public key?
+--------------------------------------------------------------------------------
+SSH (Secure Shell) is a protocol for securely connecting to a remote server.
+Instead of using a password, you can use a key pair — two mathematically linked files:
+
+  - Private key: stays on your laptop, never shared with anyone
+  - Public key:  you give this to the server
+
+When you try to connect, the server checks if your private key matches the public
+key it has on file. If they match, you're in — no password needed. It's more secure
+than passwords because there's nothing to brute-force (the key is cryptographically
+complex) and your secret never travels over the network.
+
+
+10. Explaining the SSH setup code chunk
+--------------------------------------------------------------------------------
+  sudo mkdir /home/alice/.ssh
+    Creates a hidden directory called .ssh inside Alice's home folder. The dot at
+    the start makes it hidden. This is the standard location where SSH looks for
+    keys and configuration. It doesn't exist by default — you create it.
+
+  sudo nano /home/alice/.ssh/authorized_keys
+    Creates (or opens) a file called authorized_keys inside that .ssh directory
+    using the nano text editor. This file is where you paste Alice's public key.
+    When Alice tries to SSH in, the server reads this file to check if her private
+    key matches any key listed here.
+
+  sudo chown -R alice:alice /home/alice/.ssh
+    chown = change ownership. This sets Alice as the owner of the .ssh directory
+    and everything inside it (-R = recursive, meaning all files within too). The
+    format is owner:group, so alice:alice means: owned by user alice, belonging to
+    group alice. Since we created these files with sudo, they'd otherwise be owned
+    by root — SSH will refuse to work if the keys aren't owned by the correct user.
+
+  sudo chmod 700 /home/alice/.ssh
+    chmod = change mode (permissions). 700 means:
+      - Owner (Alice): can read, write, and enter the directory
+      - Everyone else: zero access
+    SSH is strict about this — it will refuse to use keys stored in a directory
+    that others can read, because that would be a security risk. 700 ensures only
+    Alice can access her own .ssh folder.
+
+
+11. What does --disabled-password mean, and what is brute-force?
+--------------------------------------------------------------------------------
+When you disable a password, the only way to log in is via SSH key. A brute-force
+attack is when a hacker repeatedly tries thousands or millions of password
+combinations hoping to guess the right one. If there's no password at all,
+brute-forcing is pointless — there's nothing to guess. SSH keys can't be
+brute-forced because they're astronomically large numbers. This is why
+--disabled-password improves security for accounts like contractors.
+
+
+12. What is deluser?
+--------------------------------------------------------------------------------
+deluser is the opposite of adduser — it removes a user account from the system.
+Basic usage:
+
+  sudo deluser bob                  # removes the user bob
+  sudo deluser bob developers       # removes bob from the developers group only
+  sudo deluser --remove-home bob    # removes bob AND deletes his home directory
+
+It's the proper, safe way to offboard someone. It handles cleanup so you don't
+leave orphaned files or broken group memberships. You'd use it when a contractor's
+engagement ends, an employee leaves, or a service account is decommissioned.
+
+
+13. What is Docker?
+--------------------------------------------------------------------------------
+Docker is a tool that lets you package an application and all its dependencies into
+a self-contained unit called a container. Think of it like a shipping container —
+standardized, isolated, runs the same everywhere regardless of what's on the host
+machine. DevOps engineers use Docker to:
+
+  - Ensure "works on my machine" actually means "works everywhere"
+  - Run multiple isolated apps on the same server without conflicts
+  - Deploy applications consistently across dev, staging, and production
+
+The docker group on Linux allows users to run Docker commands without sudo.
+That's why Alice needed to be added to it.
+
+
+14. Explaining the CI/CD deploy user command
+--------------------------------------------------------------------------------
+  sudo adduser \
+      --system \                      (1)
+      --home /var/lib/deploy \        (2)
+      --shell /bin/bash \             (3)
+      --ingroup developers \          (4)
+      --comment "CI/CD Deploy Bot" \  (5)
+      deploy                          (6)
+
+What it's doing: Creating a user account for your CI/CD pipeline (like GitHub
+Actions) to use when it SSHes into the server to deploy code.
+
+Line by line:
+
+  (1) --system
+      Marks it as a non-human service account. Gets a UID in the system range,
+      clearly labeled as automated infrastructure.
+
+  (2) --home /var/lib/deploy
+      Gives it a home directory, but NOT under /home/ like real users. /var/lib/
+      is the Linux standard location for application state/data. We need a home
+      directory here (unlike the nginx user) because SSH requires a place to store
+      the authorized_keys file so the CI/CD system can authenticate.
+
+  (3) --shell /bin/bash
+      Unlike nginx, this account does need to run commands (deployment scripts),
+      so it gets a real shell.
+
+  (4) --ingroup developers
+      Puts it in the developers group so it has the right permissions to access
+      code directories on the server.
+
+  (5) --comment "CI/CD Deploy Bot"
+      A human-readable label. Shows up in audit logs and /etc/passwd, making it
+      obvious this is an automated account, not a person.
+
+  (6) deploy
+      The username. Short, descriptive, and clearly communicates the account's
+      purpose.
