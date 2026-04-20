@@ -1,0 +1,141 @@
+Scenario: Managing an Evolving Team on a Production Server
+
+  Your server is already set up and running. Over the next few
+  weeks, things change — people get promoted, contractors leave
+  and come back, accounts need locking, and a service user needs
+   reconfiguring. All of this is handled with usermod, which
+  modifies existing accounts rather than creating new ones.
+
+  ---
+  Step 1 — Alice Gets Promoted to DevOps Lead (Add Her to More
+  Groups)
+
+  Alice was just a developer. Now she needs access to Docker and
+   sudo to manage the server.
+
+  sudo usermod -aG docker,sudo alice
+
+  - -aG = append to supplementary groups (critical: without the
+  -a, it would replace her existing groups, stripping her of
+  everything she already had)
+  - She keeps her existing group memberships — docker and sudo
+  are just added on top
+
+  ▎ The -a flag is the most common usermod mistake. Forgetting
+  ▎ it and running usermod -G docker alice would remove her from
+  ▎  developers and every other group she's in.
+
+  ---
+  Step 2 — Bob the Contractor Comes Back (Unlock a Disabled
+  Account)
+
+  Bob's contract ended, his account was locked. He's been
+  rehired for a new project.
+
+  sudo usermod -U bob
+
+  - -U = unlock the account (removes the ! that was prefixed to
+  his password hash in /etc/shadow)
+  - No need to create a new account — the old one with all its
+  permissions is restored instantly
+
+  And if you want his access to expire automatically when the
+  contract ends (say, June 30, 2026):
+
+  sudo usermod -e 2026-06-30 bob
+
+  - -e = sets an expiry date — the account auto-locks on that
+  date, no manual action needed
+
+  ---
+  Step 3 — The Deploy Service User Needs a New Home Directory
+
+  The /var/lib/deploy directory is being moved to /opt/deploy to
+   consolidate all service data under /opt.
+
+  sudo usermod -d /opt/deploy -m deploy
+
+  - -d = set new home directory path
+  - -m = move the existing contents from the old location to the
+   new one
+  - Without -m, the path in /etc/passwd would update but the
+  actual files would stay in /var/lib/deploy, breaking SSH key
+  lookup
+
+  ---
+  Step 4 — A Junior Ops Member Gets the Wrong Username (Rename a
+   User)
+
+  You accidentally created Charlie's account as charile (typo).
+  Fix it without deleting and recreating.
+
+  sudo usermod -l charlie charile
+
+  - -l = change login name (new name first, old name second)
+  - The UID, home directory, files, and group memberships are
+  all preserved
+  - Note: the home directory path itself still shows
+  /home/charile — rename that separately:
+
+  sudo usermod -d /home/charlie -m charlie
+
+  ---
+  Step 5 — Lock an Account Immediately (Security Incident)
+
+  You get an alert that Dave's credentials may have been
+  compromised. Freeze his account instantly while you
+  investigate — without deleting anything.
+
+  sudo usermod -L dave
+
+  - -L = lock the account (prepends ! to the password hash —
+  login becomes impossible)
+  - His files, groups, and settings are completely untouched
+  - Once the investigation clears him:
+
+  sudo usermod -U dave
+
+  ---
+  Step 6 — Update a User's Display Name (Comment Field)
+
+  HR asks you to update the deploy bot's description in the
+  system records to reflect the new CI/CD platform name.
+
+  sudo usermod -c "GitHub Actions Deploy Bot" deploy
+
+  - -c = update the comment (GECOS) field — the human-readable
+  label attached to the account
+  - Shows up in audit logs, /etc/passwd, and tools like finger
+
+  ---
+  The Big Picture
+
+  ┌────────────────────────────────┬────────────────────────┐
+  │           Situation            │        Command         │
+  ├────────────────────────────────┼────────────────────────┤
+  │ Add user to more groups        │ usermod -aG            │
+  │                                │ group1,group2 user     │
+  ├────────────────────────────────┼────────────────────────┤
+  │ Lock an account                │ usermod -L user        │
+  │ (incident/offboarding)         │                        │
+  ├────────────────────────────────┼────────────────────────┤
+  │ Unlock an account              │ usermod -U user        │
+  ├────────────────────────────────┼────────────────────────┤
+  │ Set account expiry date        │ usermod -e YYYY-MM-DD  │
+  │                                │ user                   │
+  ├────────────────────────────────┼────────────────────────┤
+  │ Change + move home directory   │ usermod -d /new/path   │
+  │                                │ -m user                │
+  ├────────────────────────────────┼────────────────────────┤
+  │ Rename a user                  │ usermod -l newname     │
+  │                                │ oldname                │
+  ├────────────────────────────────┼────────────────────────┤
+  │ Update display name/label      │ usermod -c "New Name"  │
+  │                                │ user                   │
+  └────────────────────────────────┴────────────────────────┘
+
+  ---
+  The key difference between adduser and usermod in practice:
+  adduser is for day one (onboarding), usermod is for every day
+  after — promotions, incidents, contract changes, and
+  infrastructure reorganization.
